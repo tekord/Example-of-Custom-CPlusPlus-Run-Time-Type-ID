@@ -1,7 +1,16 @@
 #pragma once
 
 #include <cstddef>
+#include <map>
 #include <string>
+
+struct RttiTypeId;
+
+/// 
+struct ITypeIdProvider {
+	/// Returns runtime type ID of this instance
+	virtual RttiTypeId *getTypeId() const;
+};
 
 /// Represents a type information in runtime
 struct RttiTypeId {
@@ -10,38 +19,69 @@ struct RttiTypeId {
 	std::size_t size; // Amount of bytes for this type in memory
 
 	RttiTypeId() = default;
+
+	// In C++ standard less than 17 calling this function may cause compile-time error if the specified
+	// type don't have RTTI_HAS_TYPE_ID macro
+	template <typename T>
+	static const RttiTypeId* get() {
+#if __cplusplus >= 201703L
+		if constexpr (std::is_base_of<ITypeIdProvider, T>()) {
+			return T::__typeId;
+		}
+
+		return nullptr;
+#else
+		return T::__typeId;
+#endif
+	}
+
+	static const RttiTypeId* get(ITypeIdProvider* object) {
+		return object->getTypeId();
+	}
+
+	static const RttiTypeId* get(ITypeIdProvider& object) {
+		return object.getTypeId();
+	}
 };
 
 /// Contains methods for operating with runtime type entries
-class Rtti {
+class RttiContext final {
 public:
+	///
+	static RttiContext& instance();
+
 	/// Creates RttiTypeId and registers it in internal registry
-	static RttiTypeId * createTypeId(const std::string& name, std::size_t size);
+	RttiTypeId * createTypeId(const std::string& name, std::size_t size);
 
 	/// Creates RttiTypeId and registers it in internal registry. Template is used for
 	/// automatic size calculation
 	template <class T>
-	static RttiTypeId * createTypeId(const std::string& name) {
+	RttiTypeId * createTypeId(const std::string& name) {
 		return createTypeId(name, sizeof(T));
 	}
 
 	/// Finds a type ID entry by the name
-	static RttiTypeId *findTypeByName(const std::string& name);
+	RttiTypeId *findTypeByName(const std::string& name);
 
 private:
-	// Prevent instantiating
-	Rtti() {}
+	// Prevent external instantiating
+	RttiContext();
 
 	/// Returns next free runtime ID
-	static int nextRuntimeId();
+	int nextRuntimeId();
 
-private:
 	/// Runtime ID counter
-	static int _nextFreeRuntimeId;
+	int _nextFreeRuntimeId;
+
+	// Registry of types. RttiTypeId stored by value instead of pointer because
+	// we want to avoid dynamic memory allocation
+	std::map<std::string, RttiTypeId> rttiTypeMap;
 };
 
 /// Put this macro inside class declaration
 #define RTTI_HAS_TYPE_ID \
+	public: \
+	\
 	static RttiTypeId *__typeId; \
 	\
 	static RttiTypeId *typeId(); \
@@ -50,16 +90,18 @@ private:
 		return __typeId; \
 	}
 
-/// 
+/// Put this macro in CPP file
 #define RTTI_DEFINE_TYPE_ID(cppClassName, typeName) \
-	RttiTypeId *cppClassName::__typeId = Rtti::createTypeId<cppClassName>(typeName); \
+	RttiTypeId *cppClassName::__typeId = RttiContext::instance().createTypeId<cppClassName>(typeName); \
 	\
 	RttiTypeId *cppClassName::typeId() { \
 		return cppClassName::__typeId; \
 	}
 
-/// 
-struct TypeIdProvider {
-	/// Returns runtime type ID of this instance
-	virtual RttiTypeId *getTypeId() const = 0;
-};
+/// Utility macro for getting type ID of the specified class.
+#define RTTI_GET_TYPE(cppClass) \
+	(RttiTypeId::get<cppClass>())
+
+/// Utility macro for getting type ID of the specified class. Use this version when you need maximum performance.
+#define RTTI_GET_TYPE_UNSAFE(cppClass) \
+	(cppClass::__typeId)

@@ -1,13 +1,27 @@
-#include <map>
 #include "RTTI.h"
 
-int Rtti::_nextFreeRuntimeId = 0;
+static RttiContext* s_rttiContext;
 
-// Global registry of types. RttiTypeId stored by value instead of pointer because
-// we want to avoid dynamic memory allocation
-std::map<std::string, RttiTypeId> rttiTypeMap;
+RttiTypeId * ITypeIdProvider::getTypeId() const
+{
+	return nullptr;
+}
 
-RttiTypeId* Rtti::createTypeId(const std::string& name, std::size_t size)
+RttiContext & RttiContext::instance()
+{
+	if (s_rttiContext == nullptr) {
+		s_rttiContext = new RttiContext();
+	}
+
+	return *s_rttiContext;
+}
+
+RttiContext::RttiContext()
+{
+	_nextFreeRuntimeId = 0;
+}
+
+RttiTypeId* RttiContext::createTypeId(const std::string& name, std::size_t size)
 {
 	RttiTypeId result;
 	result.runtimeId = nextRuntimeId();
@@ -25,7 +39,7 @@ RttiTypeId* Rtti::createTypeId(const std::string& name, std::size_t size)
 #endif
 }
 
-RttiTypeId* Rtti::findTypeByName(const std::string& name)
+RttiTypeId* RttiContext::findTypeByName(const std::string& name)
 {
 	auto it = rttiTypeMap.find(name);
 
@@ -35,7 +49,7 @@ RttiTypeId* Rtti::findTypeByName(const std::string& name)
 	return nullptr;
 }
 
-int Rtti::nextRuntimeId()
+int RttiContext::nextRuntimeId()
 {
-	return ++Rtti::_nextFreeRuntimeId;
+	return ++_nextFreeRuntimeId;
 }
