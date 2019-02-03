@@ -47,7 +47,7 @@ struct RttiTypeId {
 /// Contains methods for operating with runtime type entries
 class RttiContext final {
 public:
-	///
+	/// Returns global instance of RTTI context
 	static RttiContext& instance();
 
 	/// Creates RttiTypeId and registers it in internal registry
@@ -91,17 +91,25 @@ private:
 	}
 
 /// Put this macro in CPP file
-#define RTTI_DEFINE_TYPE_ID(cppClassName, typeName) \
+#define RTTI_DEFINE_TYPE_ID(cppClassName) \
+	RttiTypeId *cppClassName::__typeId = RttiContext::instance().createTypeId<cppClassName>(#cppClassName); \
+	\
+	RttiTypeId *cppClassName::typeId() { \
+		return cppClassName::__typeId; \
+	}
+
+/// Put this macro in CPP file
+#define RTTI_DEFINE_CUSTOM_TYPE_ID(cppClassName, typeName) \
 	RttiTypeId *cppClassName::__typeId = RttiContext::instance().createTypeId<cppClassName>(typeName); \
 	\
 	RttiTypeId *cppClassName::typeId() { \
 		return cppClassName::__typeId; \
 	}
 
-/// Utility macro for getting type ID of the specified class.
+/// Utility macro for getting type ID of the specified class
 #define RTTI_GET_TYPE(cppClass) \
 	(RttiTypeId::get<cppClass>())
 
-/// Utility macro for getting type ID of the specified class. Use this version when you need maximum performance.
+/// Utility macro for getting type ID of the specified class. Use this version when you need maximum performance
 #define RTTI_GET_TYPE_UNSAFE(cppClass) \
 	(cppClass::__typeId)
